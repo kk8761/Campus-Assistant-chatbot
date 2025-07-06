@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from openai import OpenAI
 
 # ✅ Environment key
-os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY") or "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"
+os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY") or "enter your api key"
 
 # ✅ OpenRouter / OpenAI client
 client = OpenAI(

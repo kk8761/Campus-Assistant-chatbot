@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>🎓 Campus Assistant Chatbot</title>
+  <style>
+    /* Same styles as before (unchanged) */
+    :root {
+      --user-color: #00897b;
+      --bot-color: #e8f0fe;
+      --bot-text: #333;
+      --bg-light: #f7f9fc;
+      --bg-dark: #121212;
+      --text-dark: #fff;
+    }
+
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: var(--bg-light);
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      transition: background 0.3s, color 0.3s;
+    }
+
+    body.dark {
+      background: var(--bg-dark);
+      color: var(--text-dark);
+    }
+
+    header {
+      background: var(--user-color);
+      color: white;
+      padding: 15px;
+      font-size: 1.5em;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+    }
+
+    #themeToggle,
+    #ttsToggle {
+      background: rgba(255, 255, 255, 0.2);
+      border: none;
+      padding: 5px 10px;
+      color: white;
+      cursor: pointer;
+      border-radius: 5px;
+    }
+
+    #chat {
+      flex: 1;
+      padding: 20px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .msg {
+      display: flex;
+      align-items: flex-start;
+      margin-bottom: 15px;
+    }
+
+    .msg.user {
+      flex-direction: row-reverse;
+    }
+
+    .avatar {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      margin: 0 10px;
+    }
+
+    .bubble {
+      max-width: 75%;
+      padding: 12px 16px;
+      border-radius: 20px;
+      font-size: 1em;
+      position: relative;
+      line-height: 1.5;
+    }
+
+    .user .bubble {
+      background: var(--user-color);
+      color: white;
+      border-bottom-right-radius: 4px;
+    }
+
+    .bot .bubble {
+      background: var(--bot-color);
+      color: var(--bot-text);
+      border-bottom-left-radius: 4px;
+    }
+
+    .timestamp {
+      font-size: 0.7em;
+      color: #666;
+      margin-top: 4px;
+      text-align: right;
+    }
+
+    .typing-indicator {
+      font-style: italic;
+      color: #888;
+      margin-left: 50px;
+    }
+
+    footer {
+      display: flex;
+      padding: 10px;
+      background: #fff;
+      border-top: 1px solid #ccc;
+    }
+
+    body.dark footer {
+      background: #1d1d1d;
+      border-color: #333;
+    }
+
+    #user_input {
+      flex: 1;
+      padding: 10px;
+      font-size: 1em;
+      border-radius: 5px;
+      border: 1px solid #ccc;
+    }
+
+    button {
+      background: var(--user-color);
+      color: white;
+      border: none;
+      padding: 10px 15px;
+      margin-left: 10px;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: #00695c;
+    }
+
+    #mic {
+      background: #e53935;
+    }
+
+    #mic:hover {
+      background: #c62828;
+    }
+
+    @media (max-width: 600px) {
+      .bubble {
+        max-width: 90%;
+      }
+      footer {
+        flex-direction: column;
+      }
+      #user_input {
+        margin-bottom: 10px;
+        width: 100%;
+      }
+      button {
+        width: 100%;
+        margin-left: 0;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    🎓 Campus Assistant Chatbot
+    <div>
+      <button id="themeToggle">🌙 Dark</button>
+      <button id="ttsToggle">🔈 Voice On</button>
+    </div>
+  </header>
+
+  <div id="chat" role="log" aria-live="polite"></div>
+
+  <footer>
+    <input type="text" id="user_input" placeholder="Ask me something about campus..." />
+    <button id="send">Send</button>
+    <button id="mic">🎤</button>
+  </footer>
+
+  <script>
+    const chatBox = document.getElementById("chat");
+    const input = document.getElementById("user_input");
+    const sendBtn = document.getElementById("send");
+    const micBtn = document.getElementById("mic");
+    const themeToggle = document.getElementById("themeToggle");
+    const ttsToggle = document.getElementById("ttsToggle");
+
+    const userAvatar = "https://ui-avatars.com/api/?name=You&background=00897b&color=fff";
+    const botAvatar = "https://ui-avatars.com/api/?name=Bot&background=e8f0fe&color=333";
+
+    let ttsEnabled = true;
+    let vadEnabled = false;
+    let recognition;
+
+    ttsToggle.onclick = () => {
+      ttsEnabled = !ttsEnabled;
+      ttsToggle.textContent = ttsEnabled ? "🔈 Voice On" : "🔇 Voice Off";
+    };
+
+    function speak(text) {
+      if (!window.speechSynthesis || !ttsEnabled) return;
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = 'en-US';
+      utterance.rate = 1;
+      utterance.pitch = 1;
+      speechSynthesis.speak(utterance);
+    }
+
+    function getTimestamp() {
+      const now = new Date();
+      return now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+
+    function appendMessage(content, sender) {
+      const msgDiv = document.createElement("div");
+      msgDiv.className = "msg " + sender;
+
+      const avatar = document.createElement("img");
+      avatar.src = sender === 'user' ? userAvatar : botAvatar;
+      avatar.className = "avatar";
+
+      const bubble = document.createElement("div");
+      bubble.className = "bubble";
+      bubble.textContent = content;
+
+      const time = document.createElement("div");
+      time.className = "timestamp";
+      time.textContent = getTimestamp();
+      bubble.appendChild(time);
+
+      if (sender === "user") {
+        msgDiv.appendChild(bubble);
+        msgDiv.appendChild(avatar);
+      } else {
+        msgDiv.appendChild(avatar);
+        msgDiv.appendChild(bubble);
+      }
+
+      chatBox.appendChild(msgDiv);
+      chatBox.scrollTop = chatBox.scrollHeight;
+    }
+
+    function setTyping(state) {
+      const existing = document.querySelector(".typing-indicator");
+      if (state && !existing) {
+        const div = document.createElement("div");
+        div.className = "typing-indicator";
+        div.textContent = "Bot is typing...";
+        chatBox.appendChild(div);
+      } else if (!state && existing) {
+        existing.remove();
+      }
+      chatBox.scrollTop = chatBox.scrollHeight;
+    }
+
+    async function sendMessage() {
+      const message = input.value.trim();
+      if (!message) return;
+
+      appendMessage(message, "user");
+      input.value = "";
+      setTyping(true);
+
+      try {
+        const response = await fetch("/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({ user_input: message })
+        });
+        const data = await response.json();
+        setTyping(false);
+        const botResponse = data.response || "⚠ Bot error: No response received.";
+        appendMessage(botResponse, "bot");
+        speak(botResponse);
+      } catch (err) {
+        setTyping(false);
+        const errorMsg = "⚠ Offline or server error. Please try again later.";
+        appendMessage(errorMsg, "bot");
+        speak(errorMsg);
+      }
+    }
+
+    sendBtn.onclick = sendMessage;
+    input.addEventListener("keydown", e => {
+      if (e.key === "Enter") sendMessage();
+    });
+
+    micBtn.onclick = () => {
+      vadEnabled = !vadEnabled;
+      micBtn.textContent = vadEnabled ? "🛑 Stop" : "🎤";
+      if (vadEnabled) startVAD();
+      else if (recognition) recognition.stop();
+    };
+
+    function startVAD() {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRecognition) {
+        alert("Speech Recognition not supported in this browser.");
+        return;
+      }
+
+      recognition = new SpeechRecognition();
+      recognition.lang = "en-US";
+      recognition.interimResults = false;
+      recognition.continuous = false;
+
+      recognition.onresult = (e) => {
+        input.value = e.results[0][0].transcript;
+        sendMessage();
+      };
+
+      recognition.onend = () => {
+        if (vadEnabled) {
+          setTimeout(startVAD, 500); // restart after slight delay
+        }
+      };
+
+      recognition.onerror = (e) => {
+        console.error("Mic error:", e.error);
+        if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+          vadEnabled = false;
+          micBtn.textContent = "🎤";
+        }
+      };
+
+      recognition.start();
+    }
+
+    themeToggle.onclick = () => {
+      document.body.classList.toggle("dark");
+      themeToggle.textContent = document.body.classList.contains("dark") ? "☀ Light" : "🌙 Dark";
+    };
+
+    window.onload = () => {
+      const welcome = "Hi! I'm your Campus Assistant 🤖. Ask me anything about the campus, facilities, or events!";
+      appendMessage(welcome, "bot");
+      speak(welcome);
+    };
+  </script>
+</body>
+</html>
